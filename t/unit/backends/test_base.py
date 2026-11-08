@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import re
+import time
 from contextlib import contextmanager
 from unittest.mock import ANY, MagicMock, Mock, call, patch, sentinel
 from uuid import UUID
@@ -2346,6 +2347,20 @@ class test_backend_retries:
             assert res == {'status': states.SUCCESS, 'result': 42}
             assert b._sleep.call_count == 1
             b.on_backend_retryable_error.assert_called_once()
+        finally:
+            self.app.conf.result_backend_always_retry = prev
+
+    def test_store_retry_deadline_passed_still_backs_off_with_always_retry(self):
+        self.app.conf.result_backend_always_retry, prev = True, self.app.conf.result_backend_always_retry
+
+        try:
+            b = BaseBackend(app=self.app)
+            b.exception_safe_to_retry = lambda exc: True
+            b._sleep = Mock()
+            func = Mock(side_effect=[ConnectionError('down')] * 3 + ['ok'])
+            with patch('celery.backends.base.get_exponential_backoff_interval', return_value=500):
+                assert b._ensure_retryable(func, deadline=time.monotonic() - 1) == 'ok'
+            assert [c.args[0] for c in b._sleep.call_args_list] == [0.5, 0.5, 0.5]
         finally:
             self.app.conf.result_backend_always_retry = prev
 
