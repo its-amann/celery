@@ -1633,6 +1633,21 @@ class test_KeyValueStoreBackend:
         assert not self.b.implements_incr
         self.b.on_chord_part_return(None, None, None)
 
+    def test_set_chord_size_without_incr(self):
+        self.b.set = Mock()
+        self.b.expire = Mock()
+        self.b.set_chord_size('gid', 3)
+        self.b.set.assert_not_called()
+        self.b.expire.assert_not_called()
+
+    def test_set_chord_size_with_incr(self):
+        self.b.implements_incr = True
+        self.b.set = Mock()
+        self.b.expire = Mock()
+        self.b.set_chord_size('gid', 3)
+        self.b.set.assert_called_once()
+        self.b.expire.assert_called_once()
+
     def test_get_store_delete_result(self):
         tid = uuid()
         self.b.mark_as_done(tid, 'Hello world')
