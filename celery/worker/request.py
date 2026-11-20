@@ -463,6 +463,15 @@ class Request:
                 self.id, exc, request=self._context,
                 store_result=self.store_errors,
             )
+            self.task.request_stack.push(self._context)
+            try:
+                signals.task_failure.send(
+                    sender=self.task, task_id=self.id, exception=exc,
+                    args=self.args, kwargs=self.kwargs,
+                    traceback=None, einfo=None,
+                )
+            finally:
+                self.task.request_stack.pop()
             self._already_cancelled = True
             return
 

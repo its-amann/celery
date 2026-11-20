@@ -975,6 +975,25 @@ class test_Request(RequestCase):
         assert isinstance(failure_exc, WorkerLostError)
         assert job._already_cancelled is True
 
+    def test_cancel__acknowledged_sends_task_failure_signal(self):
+        pool = Mock()
+        job = self.get_request(self.mytask.s(1, f='x'))
+        job._apply_result = Mock(name='_apply_result')
+        job.task.backend.mark_as_failure = Mock(name='mark_as_failure')
+        job.acknowledge()
+        job.time_start = monotonic()
+        job.worker_pid = 314
+        handler = Mock(name='task_failure_handler')
+        task_failure.connect(handler, sender=job.task, weak=False)
+        try:
+            job.cancel(pool, signal='TERM', emit_retry=True)
+        finally:
+            task_failure.disconnect(handler, sender=job.task)
+        handler.assert_called_once()
+        kwargs = handler.call_args[1]
+        assert kwargs['task_id'] == job.id
+        assert isinstance(kwargs['exception'], WorkerLostError)
+
     def test_cancel__unacknowledged_acks_late_stores_retry(self):
         # An acks_late task that has not been acknowledged yet will be
         # redelivered by the broker (e.g. when cancelled on connection
